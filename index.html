@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEOUL Travel Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap');
+        body { font-family: 'Montserrat', sans-serif; background-color: #bfb5a2; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        
+        // --- 這裡放入您的完整程式碼邏輯 ---
+        // 我已經為您將之前的程式碼轉換成瀏覽器可執行的格式
+
+        const App = () => {
+            // 從 LocalStorage 讀取資料
+            const getSaved = (key, def) => {
+                const s = localStorage.getItem(key);
+                return s ? JSON.parse(s) : def;
+            };
+
+            const [currentPage, setCurrentPage] = useState('home');
+            const [itinerary, setItinerary] = useState(() => getSaved('seoul_itinerary', [
+                { id: 1, date: '2026-01-12', time: '09:00', title: '仁川機場抵達', location: 'Incheon' }
+            ]));
+            const [budget, setBudget] = useState(() => getSaved('seoul_budget', []));
+            const [krwInput, setKrwInput] = useState('');
+
+            // 自動存檔
+            useEffect(() => {
+                localStorage.setItem('seoul_itinerary', JSON.stringify(itinerary));
+                localStorage.setItem('seoul_budget', JSON.stringify(budget));
+            }, [itinerary, budget]);
+
+            // 圖示渲染輔助 (因為 CDN 版 Lucide 用法不同)
+            const Icon = ({ name, size = 24, className = "" }) => {
+                useEffect(() => { lucide.createIcons(); }, [currentPage, itinerary]);
+                return <i data-lucide={name} className={className} style={{width: size, height: size}}></i>;
+            };
+
+            // 簡易匯率換算
+            const totalTwd = budget.reduce((sum, item) => sum + Math.round(item.krw * 0.024), 0);
+
+            // 頁面渲染
+            const renderPage = () => {
+                if (currentPage === 'home') {
+                    return (
+                        <div className="space-y-4 animate-fadeIn">
+                            <div onClick={() => setCurrentPage('itinerary')} className="bg-[#7e6d5f] text-white p-8 rounded-[2rem] shadow-2xl cursor-pointer relative overflow-hidden">
+                                <h2 className="text-6xl font-black tracking-tighter mb-4">SEOUL</h2>
+                                <p className="text-xl font-bold">Total: NT$ {totalTwd.toLocaleString()}</p>
+                                <div className="absolute -right-4 -bottom-4 opacity-10"><Icon name="layout" size={150} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div onClick={() => setCurrentPage('itinerary')} className="bg-white/40 p-6 rounded-3xl flex flex-col gap-2 shadow-sm"><Icon name="calendar" /><h3 className="font-black text-[#3C2F2F]">行程規劃</h3></div>
+                                <div onClick={() => setCurrentPage('budget')} className="bg-white/40 p-6 rounded-3xl flex flex-col gap-2 shadow-sm"><Icon name="wallet" /><h3 className="font-black text-[#3C2F2F]">支出預算</h3></div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                if (currentPage === 'budget') {
+                    return (
+                        <div className="animate-fadeIn">
+                            <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> 返回首頁</button>
+                            <div className="bg-[#7e6d5f] rounded-[2rem] p-8 text-white mb-6">
+                                <span className="text-xs opacity-60">當前輸入 (KRW)</span>
+                                <div className="text-5xl font-black">{krwInput || '0'} ₩</div>
+                                <div className="mt-4 pt-4 border-t border-white/20 text-2xl font-black">≈ NT$ {Math.round(Number(krwInput)*0.024).toLocaleString()}</div>
+                            </div>
+                            {/* 數字鍵盤 */}
+                            <div className="grid grid-cols-4 gap-2 mb-6">
+                                {[1,2,3,'C',4,5,6,'DEL',7,8,9,0].map(n => (
+                                    <button key={n} onClick={() => {
+                                        if(n==='C') setKrwInput('');
+                                        else if(n==='DEL') setKrwInput(prev => prev.slice(0,-1));
+                                        else setKrwInput(prev => prev + n);
+                                    }} className="bg-white/60 p-4 rounded-xl font-black text-[#7e6d5f]">{n}</button>
+                                ))}
+                                <button onClick={() => {
+                                    if(!krwInput) return;
+                                    setBudget([{id:Date.now(), krw:Number(krwInput), text:'新項目'}, ...budget]);
+                                    setKrwInput('');
+                                }} className="col-span-4 bg-[#7e6d5f] text-white p-4 rounded-xl font-black">新增此筆支出</button>
+                            </div>
+                            <div className="space-y-2">
+                                {budget.map(item => (
+                                    <div key={item.id} className="bg-white/30 p-4 rounded-xl flex justify-between items-center">
+                                        <span className="font-bold text-[#3C2F2F]">{item.krw.toLocaleString()} ₩</span>
+                                        <span className="font-black text-[#7e6d5f]">NT$ {Math.round(item.krw*0.024)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                }
+                
+                return <div className="p-10 text-center font-black">頁面開發中...</div>;
+            };
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen p-6">
+                    <header className="mb-8 border-b-2 border-[#7e6d5f]/10 pb-4">
+                        <h1 className="text-2xl font-black tracking-tighter uppercase">旅遊規劃表</h1>
+                        <p className="text-[9px] font-black tracking-[0.4em] opacity-40">SEOUL TRAVEL PLANNER</p>
+                    </header>
+                    <main>{renderPage()}</main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
