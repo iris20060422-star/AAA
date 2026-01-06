@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SEOUL Travel Planner</title>
+    <title>SEOUL 2026 旅遊規劃</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,8 +11,10 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap');
-        body { font-family: 'Montserrat', sans-serif; background-color: #bfb5a2; }
+        body { font-family: 'Montserrat', sans-serif; background-color: #bfb5a2; -webkit-tap-highlight-color: transparent; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -20,103 +22,208 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
-        
-        // --- 這裡放入您的完整程式碼邏輯 ---
-        // 我已經為您將之前的程式碼轉換成瀏覽器可執行的格式
+
+        // --- 初始化資料 ---
+        const getStorage = (key, fallback) => {
+            const saved = localStorage.getItem(key);
+            try { return saved ? JSON.parse(saved) : fallback; } catch { return fallback; }
+        };
+
+        // --- 圖示組件 (修正沒顯示的問題) ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} className={className} style={{width: size, height: size, display: 'inline-block'}}></i>;
+        };
 
         const App = () => {
-            // 從 LocalStorage 讀取資料
-            const getSaved = (key, def) => {
-                const s = localStorage.getItem(key);
-                return s ? JSON.parse(s) : def;
-            };
-
-            const [currentPage, setCurrentPage] = useState('home');
-            const [itinerary, setItinerary] = useState(() => getSaved('seoul_itinerary', [
-                { id: 1, date: '2026-01-12', time: '09:00', title: '仁川機場抵達', location: 'Incheon' }
+            const [page, setPage] = useState('home');
+            
+            // 資料狀態
+            const [itinerary, setItinerary] = useState(() => getStorage('it_data', [
+                { id: 1, time: '09:00', title: '抵達仁川機場', location: 'Incheon Airport', date: '2026-01-12' }
             ]));
-            const [budget, setBudget] = useState(() => getSaved('seoul_budget', []));
+            const [budget, setBudget] = useState(() => getStorage('bg_data', []));
+            const [luggage, setLuggage] = useState(() => getStorage('lg_data', [{ id: 1, text: '護照', checked: true }]));
+            const [photos, setPhotos] = useState(() => getStorage('ph_data', [
+                { id: 1, url: 'https://images.unsplash.com/photo-1538669715515-5c3758c07ba9?w=400', note: '首爾塔' }
+            ]));
+
             const [krwInput, setKrwInput] = useState('');
 
             // 自動存檔
             useEffect(() => {
-                localStorage.setItem('seoul_itinerary', JSON.stringify(itinerary));
-                localStorage.setItem('seoul_budget', JSON.stringify(budget));
-            }, [itinerary, budget]);
+                localStorage.setItem('it_data', JSON.stringify(itinerary));
+                localStorage.setItem('bg_data', JSON.stringify(budget));
+                localStorage.setItem('lg_data', JSON.stringify(luggage));
+                localStorage.setItem('ph_data', JSON.stringify(photos));
+            }, [itinerary, budget, luggage, photos]);
 
-            // 圖示渲染輔助 (因為 CDN 版 Lucide 用法不同)
-            const Icon = ({ name, size = 24, className = "" }) => {
-                useEffect(() => { lucide.createIcons(); }, [currentPage, itinerary]);
-                return <i data-lucide={name} className={className} style={{width: size, height: size}}></i>;
-            };
+            const totalTwd = budget.reduce((s, i) => s + Math.round(i.krw * 0.024), 0);
 
-            // 簡易匯率換算
-            const totalTwd = budget.reduce((sum, item) => sum + Math.round(item.krw * 0.024), 0);
-
-            // 頁面渲染
-            const renderPage = () => {
-                if (currentPage === 'home') {
-                    return (
-                        <div className="space-y-4 animate-fadeIn">
-                            <div onClick={() => setCurrentPage('itinerary')} className="bg-[#7e6d5f] text-white p-8 rounded-[2rem] shadow-2xl cursor-pointer relative overflow-hidden">
-                                <h2 className="text-6xl font-black tracking-tighter mb-4">SEOUL</h2>
-                                <p className="text-xl font-bold">Total: NT$ {totalTwd.toLocaleString()}</p>
-                                <div className="absolute -right-4 -bottom-4 opacity-10"><Icon name="layout" size={150} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div onClick={() => setCurrentPage('itinerary')} className="bg-white/40 p-6 rounded-3xl flex flex-col gap-2 shadow-sm"><Icon name="calendar" /><h3 className="font-black text-[#3C2F2F]">行程規劃</h3></div>
-                                <div onClick={() => setCurrentPage('budget')} className="bg-white/40 p-6 rounded-3xl flex flex-col gap-2 shadow-sm"><Icon name="wallet" /><h3 className="font-black text-[#3C2F2F]">支出預算</h3></div>
-                            </div>
+            // --- 頁面渲染邏輯 ---
+            
+            // 1. 首頁 (六宮格)
+            const HomePage = () => (
+                <div className="space-y-4 animate-in">
+                    <div onClick={() => setPage('itinerary')} className="bg-[#7e6d5f] text-white p-8 rounded-[2rem] shadow-xl cursor-pointer relative overflow-hidden group">
+                        <div className="relative z-10">
+                            <h2 className="text-6xl font-black tracking-tighter">SEOUL</h2>
+                            <p className="mt-2 font-bold opacity-80 uppercase tracking-widest text-sm">2026 Winter Trip</p>
                         </div>
-                    );
-                }
-
-                if (currentPage === 'budget') {
-                    return (
-                        <div className="animate-fadeIn">
-                            <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> 返回首頁</button>
-                            <div className="bg-[#7e6d5f] rounded-[2rem] p-8 text-white mb-6">
-                                <span className="text-xs opacity-60">當前輸入 (KRW)</span>
-                                <div className="text-5xl font-black">{krwInput || '0'} ₩</div>
-                                <div className="mt-4 pt-4 border-t border-white/20 text-2xl font-black">≈ NT$ {Math.round(Number(krwInput)*0.024).toLocaleString()}</div>
-                            </div>
-                            {/* 數字鍵盤 */}
-                            <div className="grid grid-cols-4 gap-2 mb-6">
-                                {[1,2,3,'C',4,5,6,'DEL',7,8,9,0].map(n => (
-                                    <button key={n} onClick={() => {
-                                        if(n==='C') setKrwInput('');
-                                        else if(n==='DEL') setKrwInput(prev => prev.slice(0,-1));
-                                        else setKrwInput(prev => prev + n);
-                                    }} className="bg-white/60 p-4 rounded-xl font-black text-[#7e6d5f]">{n}</button>
-                                ))}
-                                <button onClick={() => {
-                                    if(!krwInput) return;
-                                    setBudget([{id:Date.now(), krw:Number(krwInput), text:'新項目'}, ...budget]);
-                                    setKrwInput('');
-                                }} className="col-span-4 bg-[#7e6d5f] text-white p-4 rounded-xl font-black">新增此筆支出</button>
-                            </div>
-                            <div className="space-y-2">
-                                {budget.map(item => (
-                                    <div key={item.id} className="bg-white/30 p-4 rounded-xl flex justify-between items-center">
-                                        <span className="font-bold text-[#3C2F2F]">{item.krw.toLocaleString()} ₩</span>
-                                        <span className="font-black text-[#7e6d5f]">NT$ {Math.round(item.krw*0.024)}</span>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="absolute right-8 bottom-8 text-right z-10">
+                            <p className="text-xs opacity-60">Total Budget</p>
+                            <p className="text-2xl font-black">NT$ {totalTwd.toLocaleString()}</p>
                         </div>
-                    );
-                }
-                
-                return <div className="p-10 text-center font-black">頁面開發中...</div>;
-            };
+                        <Icon name="map" className="absolute -left-4 -bottom-4 text-white opacity-10 w-48 h-48" size={160} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div onClick={() => setPage('budget')} className="bg-white/40 p-6 rounded-3xl shadow-sm cursor-pointer active:scale-95 transition-all">
+                            <Icon name="wallet" className="text-[#7e6d5f] mb-3" />
+                            <h3 className="text-xl font-black text-[#3C2F2F]">支出預算</h3>
+                        </div>
+                        <div onClick={() => setPage('luggage')} className="bg-white/40 p-6 rounded-3xl shadow-sm cursor-pointer active:scale-95 transition-all">
+                            <Icon name="briefcase" className="text-[#7e6d5f] mb-3" />
+                            <h3 className="text-xl font-black text-[#3C2F2F]">裝備清單</h3>
+                        </div>
+                        <div onClick={() => setPage('gallery')} className="bg-white/40 p-6 rounded-3xl shadow-sm cursor-pointer active:scale-95 transition-all">
+                            <Icon name="camera" className="text-[#7e6d5f] mb-3" />
+                            <h3 className="text-xl font-black text-[#3C2F2F]">旅途相簿</h3>
+                        </div>
+                        <div className="bg-white/40 p-6 rounded-3xl shadow-sm flex flex-col justify-end">
+                            <Icon name="settings" className="text-[#7e6d5f] opacity-20" />
+                            <h3 className="text-xl font-black text-[#3C2F2F] opacity-20">設定</h3>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // 2. 行程頁
+            const ItineraryPage = () => (
+                <div className="animate-in pb-20">
+                    <button onClick={() => setPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> BACK</button>
+                    <h2 className="text-3xl font-black mb-6 uppercase tracking-tighter">Itinerary</h2>
+                    <div className="relative pl-8 border-l-4 border-[#7e6d5f]/20 space-y-8">
+                        {itinerary.map(item => (
+                            <div key={item.id} className="relative">
+                                <div className="absolute -left-[42px] top-1 w-4 h-4 bg-[#7e6d5f] rounded-full border-4 border-[#bfb5a2]"></div>
+                                <div className="bg-white/50 p-5 rounded-2xl shadow-sm">
+                                    <span className="text-[#7e6d5f] font-black text-xl">{item.time}</span>
+                                    <h4 className="text-xl font-black text-[#3C2F2F]">{item.title}</h4>
+                                    <p className="text-sm opacity-60 font-bold"><Icon name="map-pin" size={12}/> {item.location}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <button className="fixed bottom-10 right-10 bg-[#7e6d5f] text-white p-4 rounded-full shadow-2xl" onClick={() => {
+                        const title = prompt("行程名稱?");
+                        if(title) setItinerary([...itinerary, { id: Date.now(), time: '12:00', title, location: 'Seoul', date: '2026-01-12' }]);
+                    }}><Icon name="plus" /></button>
+                </div>
+            );
+
+            // 3. 預算頁 (含大按鈕計算機)
+            const BudgetPage = () => (
+                <div className="animate-in pb-20">
+                    <button onClick={() => setPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> BACK</button>
+                    <div className="bg-[#7e6d5f] rounded-3xl p-8 text-white shadow-lg mb-6">
+                        <p className="text-xs opacity-60 font-bold uppercase tracking-widest">KRW Amount</p>
+                        <div className="text-5xl font-black my-2">{krwInput || '0'} <span className="text-xl">₩</span></div>
+                        <div className="pt-4 border-t border-white/20 font-black text-2xl">≈ NT$ {Math.round(Number(krwInput)*0.024).toLocaleString()}</div>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2 mb-8">
+                        {[1,2,3,'C',4,5,6,'DEL',7,8,9,0].map(btn => (
+                            <button key={btn} onClick={() => {
+                                if(btn === 'C') setKrwInput('');
+                                else if(btn === 'DEL') setKrwInput(prev => prev.slice(0,-1));
+                                else if(krwInput.length < 9) setKrwInput(prev => prev + btn);
+                            }} className="h-16 bg-white/60 rounded-2xl font-black text-[#7e6d5f] active:bg-[#7e6d5f] active:text-white transition-colors">{btn}</button>
+                        ))}
+                        <button onClick={() => {
+                            if(!krwInput) return;
+                            const note = prompt("支出備註?");
+                            setBudget([{id: Date.now(), krw: Number(krwInput), text: note || '未分類'}, ...budget]);
+                            setKrwInput('');
+                        }} className="col-span-4 h-16 bg-[#7e6d5f] text-white rounded-2xl font-black shadow-lg">記下這筆支出</button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {budget.map(item => (
+                            <div key={item.id} className="bg-white/40 p-4 rounded-2xl flex justify-between items-center border-l-4 border-[#7e6d5f]">
+                                <div>
+                                    <p className="font-black text-[#3C2F2F]">{item.text}</p>
+                                    <p className="text-xs font-bold opacity-40">{item.krw.toLocaleString()} ₩</p>
+                                </div>
+                                <div className="text-right font-black text-[#7e6d5f]">NT$ {Math.round(item.krw * 0.024)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            // 4. 相簿頁
+            const GalleryPage = () => (
+                <div className="animate-in">
+                    <button onClick={() => setPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> BACK</button>
+                    <div className="grid grid-cols-2 gap-4">
+                        {photos.map(p => (
+                            <div key={p.id} className="aspect-square rounded-2xl overflow-hidden shadow-md relative">
+                                <img src={p.url} className="w-full h-full object-cover" />
+                                <div className="absolute bottom-0 inset-x-0 p-2 bg-black/40 text-white text-[10px] font-bold truncate">{p.note}</div>
+                            </div>
+                        ))}
+                        <div onClick={() => {
+                            const url = prompt("圖片網址?");
+                            if(url) setPhotos([...photos, { id: Date.now(), url, note: 'New Photo' }]);
+                        }} className="aspect-square border-4 border-dashed border-[#7e6d5f]/30 rounded-2xl flex flex-col items-center justify-center text-[#7e6d5f] cursor-pointer"><Icon name="plus" /><span className="text-xs font-black mt-2">新增相片</span></div>
+                    </div>
+                </div>
+            );
+
+            // 5. 行李清單
+            const LuggagePage = () => (
+                <div className="animate-in">
+                    <button onClick={() => setPage('home')} className="mb-6 flex items-center font-black text-[#3C2F2F]"><Icon name="chevron-left" /> BACK</button>
+                    <div className="space-y-3">
+                        {luggage.map(item => (
+                            <div key={item.id} onClick={() => setLuggage(luggage.map(l => l.id === item.id ? {...l, checked: !l.checked} : l))} className={`p-5 rounded-2xl flex items-center gap-4 cursor-pointer transition-all ${item.checked ? 'bg-[#7e6d5f]/10 opacity-50' : 'bg-white/60 shadow-sm'}`}>
+                                <Icon name={item.checked ? 'check-circle' : 'circle'} className="text-[#7e6d5f]" />
+                                <span className={`text-xl font-black ${item.checked ? 'line-through' : ''}`}>{item.text}</span>
+                            </div>
+                        ))}
+                        <button className="w-full p-4 border-2 border-dashed border-[#7e6d5f]/40 rounded-2xl font-black text-[#7e6d5f]" onClick={() => {
+                            const t = prompt("要帶什麼?");
+                            if(t) setLuggage([...luggage, {id: Date.now(), text: t, checked: false}]);
+                        }}>+ 新增物品</button>
+                    </div>
+                </div>
+            );
 
             return (
                 <div className="max-w-md mx-auto min-h-screen p-6">
-                    <header className="mb-8 border-b-2 border-[#7e6d5f]/10 pb-4">
-                        <h1 className="text-2xl font-black tracking-tighter uppercase">旅遊規劃表</h1>
-                        <p className="text-[9px] font-black tracking-[0.4em] opacity-40">SEOUL TRAVEL PLANNER</p>
+                    <header className="flex justify-between items-center mb-10 pt-4 border-b-2 border-[#7e6d5f]/10 pb-6">
+                        <div>
+                            <h1 className="text-3xl font-black tracking-tighter uppercase leading-none text-[#3C2F2F]">旅遊規劃表</h1>
+                            <p className="text-[9px] font-black tracking-[0.5em] opacity-40 mt-1 uppercase">Travel Planning Table</p>
+                        </div>
+                        <div className="w-12 h-12 bg-[#7e6d5f] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg border border-white/20">P</div>
                     </header>
-                    <main>{renderPage()}</main>
+
+                    <main>
+                        {page === 'home' && <HomePage />}
+                        {page === 'itinerary' && <ItineraryPage />}
+                        {page === 'budget' && <BudgetPage />}
+                        {page === 'gallery' && <GalleryPage />}
+                        {page === 'luggage' && <LuggagePage />}
+                    </main>
+
+                    {/* 懸浮計算機按鈕 (非預算頁時顯示) */}
+                    {page !== 'budget' && (
+                        <button onClick={() => setPage('budget')} className="fixed bottom-8 right-6 w-16 h-16 bg-[#7e6d5f] text-white rounded-full shadow-2xl flex items-center justify-center z-50 active:scale-90 transition-all">
+                            <Icon name="calculator" size={28} />
+                        </button>
+                    )}
                 </div>
             );
         };
